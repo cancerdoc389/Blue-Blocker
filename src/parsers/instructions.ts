@@ -153,6 +153,13 @@ export function ParseTimelineTweet(tweet: any, config: CompiledConfig) {
 				promoted,
 			);
 		}
+		// Promoted tweets / ads place the advertiser's user object in a separate
+		// location that does not follow the normal tweet_results path, so handle
+		// it explicitly to avoid missing these accounts (and the resulting errors).
+		const advertiser = tweet?.itemContent?.promotedMetadata?.advertiser_results?.result;
+		if (advertiser?.__typename === 'User') {
+			handleUserObject({ user_results: { result: advertiser } }, config, false);
+		}
 		handleTweetObject(tweet.itemContent, config, promoted);
 	} catch (e) {
 		console.error(logstr, 'found unexpected tweet shape:', JSON.stringify(tweet), e);

@@ -5,19 +5,23 @@ let _api: {
 	tabs: typeof chrome.tabs | typeof browser.tabs;
 	management: typeof chrome.management | typeof browser.management;
 };
-try {
-	_api = {
-		// @ts-ignore
-		runtime: browser.runtime,
-		storage: browser.storage,
-		action: browser.browserAction,
-		contentScripts: browser.contentScripts,
-		tabs: browser.tabs,
-		management: browser.management,
-	};
-} catch (ReferenceError) {
-	_api = chrome;
-}
+// Pick the correct extension namespace. Firefox exposes `browser`, while
+// Chromium browsers expose `chrome`. Some recent Chromium builds (and a few
+// forks like Brave/Helium) also define a partial `browser` global, so we can't
+// rely on `browser` existing meaning we're on Firefox. We detect the real root
+// by checking which namespace actually has a usable `runtime`.
+// @ts-ignore - `browser` may be undefined in Chromium
+const _root: any = typeof browser !== 'undefined' && browser?.runtime ? browser : chrome;
+_api = {
+	runtime: _root.runtime,
+	storage: _root.storage,
+	// Manifest V3 (Chrome) uses `action`; Manifest V2 (Firefox) uses `browserAction`.
+	action: _root.action ?? _root.browserAction,
+	// @ts-ignore - only present on Firefox
+	contentScripts: _root.contentScripts,
+	tabs: _root.tabs,
+	management: _root.management,
+};
 export const api = _api;
 export const logstr: string = '[Blue Blocker]';
 export const DefaultOptions: Config = {
