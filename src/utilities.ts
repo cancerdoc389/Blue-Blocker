@@ -248,7 +248,9 @@ export function UsernameElement(userName: string, screenName: string): HTMLParag
 }
 
 export function getUserName(user: BlueBlockerUser) {
-	const username = user?.legacy?.name || user?.core?.name;
+	// X.com migrated `name`/`screen_name` out of `legacy` and into `core`.
+	// Some responses also nest the display name under `core.name`.
+	const username = user?.core?.name || user?.legacy?.name;
 	if (!username) {
 		throw new Error(`Unable to get user name for user ${user.rest_id}`);
 	}
@@ -257,7 +259,8 @@ export function getUserName(user: BlueBlockerUser) {
 }
 
 export function getScreenName(user: BlueBlockerUser) {
-	const screen_name = user?.legacy?.screen_name || user?.core?.screen_name;
+	// X.com migrated `screen_name` out of `legacy` and into `core`.
+	const screen_name = user?.core?.screen_name || user?.legacy?.screen_name;
 	if (!screen_name) {
 		throw new Error(`Unable to get screen name for user ${user.rest_id}`);
 	}
@@ -266,12 +269,12 @@ export function getScreenName(user: BlueBlockerUser) {
 }
 
 export function isFollowing(user: BlueBlockerUser): boolean {
-	const following = user?.legacy?.following || user?.relationship_perspectives?.following;
-	if (following === undefined) {
-		throw new Error(`Unable to get following status for user ${user.rest_id}`); // if we can't determine following, throw an error. because one of these keys must exist.
-	}
-
-	return following;
+	// X.com moved relationship flags from `legacy` to `relationship_perspectives`.
+	// Newer timeline responses may omit the flag entirely; in that case assume
+	// the user is not followed rather than throwing (which used to halt parsing
+	// and spam error popups). This matches the defensive behaviour of the
+	// isFollowedBy/isBlocking/isMuting helpers below.
+	return user?.relationship_perspectives?.following || user?.legacy?.following || false;
 }
 
 export function isFollowedBy(user: BlueBlockerUser): boolean {

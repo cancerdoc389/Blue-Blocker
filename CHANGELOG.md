@@ -9,6 +9,12 @@ Summary
 	5. version timestamp follow the yyyy.MM.dd format
 ```
 
+# Unreleased
+
+-   fix: detect the extension API namespace reliably on Chromium browsers that expose a partial `browser` global (restores popup controls and toolbar badge) (#427)
+-   fix: read user name/screen name from `core` and stop throwing on missing relationship flags after x.com schema changes (#416)
+-   fix: block advertisers in promoted tweets using the new `promotedMetadata.advertiser_results` shape (#416)
+
 # v0.3.4 [2023.07.04]
 
 -   feat: show alert when user is logged out
