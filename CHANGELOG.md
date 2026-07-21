@@ -11,6 +11,7 @@ Summary
 
 # Unreleased
 
+-   fix: intercept `fetch()` in addition to `XMLHttpRequest` so timeline parsing and auth-header capture survive x.com moving API traffic to fetch (restores queue processing and blocking of new accounts)
 -   fix: detect the extension API namespace reliably on Chromium browsers that expose a partial `browser` global (restores popup controls and toolbar badge) (#427)
 -   fix: read user name/screen name from `core` and stop throwing on missing relationship flags after x.com schema changes (#416)
 -   fix: block advertisers in promoted tweets using the new `promotedMetadata.advertiser_results` shape (#416)
