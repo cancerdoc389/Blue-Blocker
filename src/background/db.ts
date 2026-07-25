@@ -443,6 +443,25 @@ export function PopUserFromQueue(): Promise<BlockUser | null> {
 	);
 }
 
+export function ClearQueue(): Promise<void> {
+	// wipe the block queue so a backlog never survives into a new browser session.
+	// draining a stale, unattended queue on page load is the behaviour that reads as
+	// automation to x.com (and causes the appeal -> instant re-suspend loop).
+	return ConnectDb()
+		.then(
+			qdb =>
+				new Promise<void>((resolve, reject) => {
+					const transaction = qdb.transaction([queueDbStore], 'readwrite');
+					transaction.onabort = transaction.onerror = reject;
+					transaction.oncomplete = () => resolve();
+					transaction.objectStore(queueDbStore).clear();
+					transaction.commit();
+				}),
+		)
+		// also drop the pre-0.3.0 storage.local backlog so ConnectDb can't re-import it
+		.then(() => api.storage.local.set({ BlockQueue: null }));
+}
+
 export function WholeQueue(): Promise<BlockUser[]> {
 	return ConnectDb()
 		.then(qdb => {
