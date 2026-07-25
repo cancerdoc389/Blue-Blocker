@@ -486,6 +486,17 @@ function blockUser(user: BlockUser, attempt = 1) {
 									user.user,
 								)}, user no longer exists`,
 							);
+						} else if (response.status === 429) {
+							// rate limited: re-queue and back off for a long randomised period
+							// instead of hammering the endpoint, which itself looks automated.
+							QueuePush(user);
+							consumer.cooldown();
+							console.warn(
+								logstr,
+								`rate limited by x.com, backing off. re-queued ${FormatLegacyName(
+									user.user,
+								)}.`,
+							);
 						} else if (response.status >= 300) {
 							consumer.stop();
 							QueuePush(user);
@@ -563,6 +574,17 @@ function blockUser(user: BlockUser, attempt = 1) {
 										`could not ${
 											config.mute ? 'mute' : 'block'
 										} ${FormatLegacyName(user.user)}, user no longer exists`,
+									);
+								} else if (response.status === 429) {
+									// rate limited: re-queue and back off for a long randomised
+									// period instead of hammering, which itself looks automated.
+									QueuePush(user);
+									consumer.cooldown();
+									console.warn(
+										logstr,
+										`rate limited by x.com, backing off. re-queued ${FormatLegacyName(
+											user.user,
+										)}.`,
 									);
 								} else if (response.status >= 300) {
 									consumer.stop();
