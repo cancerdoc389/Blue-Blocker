@@ -395,11 +395,10 @@ function checkBlockQueue(): Promise<void> {
 	});
 }
 
-const consumer = new QueueConsumer(api.storage.local, checkBlockQueue, async () => {
-	const items = await api.storage.sync.get({ blockInterval: DefaultOptions.blockInterval });
-	return items.blockInterval * 1000;
-});
-consumer.start();
+const consumer = new QueueConsumer(api.storage.local, checkBlockQueue);
+// note: we deliberately do NOT start the consumer on page load. blocking begins only
+// once this session queues an account (see queueBlockUser), after a randomised startup
+// delay, so it never auto-drains a queue the instant x.com opens.
 
 const CsrfTokenRegex = /ct0=\s*(\w+)(?:;|$)/;
 
