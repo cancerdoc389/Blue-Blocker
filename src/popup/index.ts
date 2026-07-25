@@ -100,7 +100,7 @@ function inputMirror(
 
 function sliderMirror(
 	name: string,
-	key: 'popupTimer' | 'blockInterval',
+	key: 'popupTimer',
 	config: Config,
 	options: { onInput?: (e: Event, ele: HTMLInputElement[]) => any } = {},
 ) {
@@ -371,19 +371,6 @@ document.addEventListener('DOMContentLoaded', () => {
 		});
 
 		sliderMirror('popup-timer', 'popupTimer', config);
-		sliderMirror('block-interval', 'blockInterval', config, {
-			onInput(e, ele) {
-				const target = e.target as HTMLInputElement;
-				const targetValue = parseInt(target.value);
-				ele.forEach(i => (i.value = target.value));
-				document
-					.getElementsByName('variance')
-					.forEach(e => (e.innerText = '±' + (targetValue / 10).toFixed(1) + 's'));
-				document
-					.getElementsByName(target.name + '-value')
-					.forEach(v => (v.textContent = target.value.toString() + 's'));
-			},
-		});
 
 		// safelist logic
 		// import cannot be done here, only on a standalone page

@@ -12,7 +12,6 @@ interface Config {
 	skipVerified: boolean;
 	skipAffiliated: boolean;
 	skip1Mplus: boolean;
-	blockInterval: number;
 	unblocked: { [k: string]: string? };
 	popupTimer: number;
 	skipFollowerCount: number;
@@ -35,7 +34,6 @@ interface CompiledConfig {
 	skipVerified: boolean;
 	skipAffiliated: boolean;
 	skip1Mplus: boolean;
-	blockInterval: number;
 	unblocked: { [k: string]: string? };
 	popupTimer: number;
 	skipFollowerCount: number;

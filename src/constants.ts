@@ -38,7 +38,6 @@ export const DefaultOptions: Config = {
 	skipVerified: true,
 	skipAffiliated: true,
 	skip1Mplus: true,
-	blockInterval: 15,
 	popupTimer: 30,
 	skipFollowerCount: 1e6,
 	soupcanIntegration: false,

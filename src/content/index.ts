@@ -21,7 +21,6 @@ function compileConfig(config: Config): CompiledConfig {
 		skipVerified: config.skipVerified,
 		skipAffiliated: config.skipAffiliated,
 		skip1Mplus: config.skip1Mplus,
-		blockInterval: config.blockInterval,
 		unblocked: config.unblocked,
 		popupTimer: config.popupTimer,
 		skipFollowerCount: config.skipFollowerCount,
