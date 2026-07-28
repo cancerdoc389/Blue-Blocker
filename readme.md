@@ -17,7 +17,7 @@ Blocks do not all happen at once. To keep activity looking like a real person br
 - **There's a short delay before it starts.** When you open x.com, blocking doesn't begin immediately. There's a randomised warm-up wait (roughly 45 seconds to 2 minutes) before the first account is blocked.
 - **Blocks are spread out, at random.** Accounts are blocked a random number of seconds apart (never in a rapid burst), in small groups, with a longer random pause between each group. Because of this, an account you've just scrolled past may not be blocked for a little while — this is expected and intentional.
 - **It only runs when the tab is in front.** If you switch to another tab or another program, blocking pauses and picks up again when you come back to x.com.
-- **The queue doesn't carry over between sessions.** Anything still waiting to be blocked is cleared when you close and reopen your browser, so it won't suddenly work through an old backlog the moment you next open x.com.
+- **Queued accounts expire.** Anything waiting to be blocked is automatically dropped if it's more than a few hours old (currently 3 hours), so Blue Blocker only ever acts on accounts you've seen recently — it will never work through a day-old backlog. If you leave and come back later, the stale queue is discarded rather than resumed.
 - **It backs off if x.com pushes back.** If x.com signals that you're going too fast, Blue Blocker stops for a long random cooldown (15–60 minutes) instead of retrying straight away.
 
 Because all of this timing is handled automatically, there is no longer a "block interval" setting to configure. None of it changes _which_ accounts get blocked — only _when_.
