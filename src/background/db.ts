@@ -8,7 +8,7 @@ import {
 	HistoryStateBlocked,
 	HistoryStateUnblocked,
 } from '../constants';
-import { commafy, QueueId } from '../utilities';
+import { commafy, QueueId, StaleQueueBoundary } from '../utilities';
 
 const expectedVerifiedUsersCount = 407520;
 let legacyDb: IDBDatabase;
@@ -216,6 +216,11 @@ const dbName = 'blue-blocker-db';
 export const historyDbStore = 'blocked_users';
 export const queueDbStore = 'block_queue';
 const dbVersion = 2;
+// rolling recency: a queued account expires if it was seen longer ago than this, so we
+// never work through a stale, unattended backlog (the pattern that reads as automation).
+// this age limit IS the session boundary — nothing older ever gets blocked.
+// ponytail: single knob; raise/lower to widen/narrow the "recent browsing" window.
+const MAX_QUEUE_AGE_MS = 3 * 60 * 60 * 1000; // 3 hours
 // used so we don't load the db twice
 let dbLoaded: boolean = false;
 
@@ -402,6 +407,15 @@ export function AddUserToQueue(blockUser: BlockUser): Promise<void> {
 export function PopUserFromQueue(): Promise<BlockUser | null> {
 	// @ts-ignore  // typescript is wrong here, this cannot return idb due to final throw
 	return new Promise<BlockUser | null>(async (resolve, reject) => {
+		// rolling recency: drop stale entries first. best-effort — a failed purge must
+		// never stop us popping, and purge runs in its own transaction so it's finished
+		// before we open the pop transaction below.
+		try {
+			await purgeStaleQueue();
+		} catch (e) {
+			console.error(logstr, 'failed to purge stale queue entries', e);
+		}
+
 		const transaction = db.transaction([queueDbStore], 'readwrite');
 		transaction.onabort = transaction.onerror = reject;
 		const store = transaction.objectStore(queueDbStore);
@@ -443,23 +457,27 @@ export function PopUserFromQueue(): Promise<BlockUser | null> {
 	);
 }
 
-export function ClearQueue(): Promise<void> {
-	// wipe the block queue so a backlog never survives into a new browser session.
-	// draining a stale, unattended queue on page load is the behaviour that reads as
-	// automation to x.com (and causes the appeal -> instant re-suspend loop).
-	return ConnectDb()
-		.then(
-			qdb =>
-				new Promise<void>((resolve, reject) => {
-					const transaction = qdb.transaction([queueDbStore], 'readwrite');
-					transaction.onabort = transaction.onerror = reject;
-					transaction.oncomplete = () => resolve();
-					transaction.objectStore(queueDbStore).clear();
-					transaction.commit();
-				}),
-		)
-		// also drop the pre-0.3.0 storage.local backlog so ConnectDb can't re-import it
-		.then(() => api.storage.local.set({ BlockQueue: null }));
+// evict every queued account older than MAX_QUEUE_AGE_MS. larger `queue` value = older,
+// so everything from the stale boundary upward is expired and deleted.
+function purgeStaleQueue(): Promise<void> {
+	return new Promise<void>((resolve, reject) => {
+		const transaction = db.transaction([queueDbStore], 'readwrite');
+		transaction.onabort = transaction.onerror = reject;
+		transaction.oncomplete = () => resolve();
+		const index = transaction.objectStore(queueDbStore).index('queue');
+		const req = index.openCursor(
+			IDBKeyRange.lowerBound(StaleQueueBoundary(MAX_QUEUE_AGE_MS)),
+		);
+		req.onerror = reject;
+		req.onsuccess = () => {
+			const cursor = req.result;
+			if (cursor) {
+				cursor.delete();
+				cursor.continue();
+			}
+			// no cursor: iteration done, transaction auto-commits and fires oncomplete
+		};
+	});
 }
 
 export function WholeQueue(): Promise<BlockUser[]> {

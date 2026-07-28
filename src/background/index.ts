@@ -23,7 +23,6 @@ import {
 	AddUserToHistory,
 	AddUserToQueue,
 	CheckDbIsUserLegacyVerified,
-	ClearQueue,
 	ConnectDb,
 	PopUserFromQueue,
 	PopulateVerifiedDb,
@@ -69,12 +68,6 @@ api.storage.sync.onChanged.addListener(async items => {
 });
 
 ConnectDb();
-
-// the block queue is session-only: clear any leftover backlog when a new browser
-// session starts, so blocking never auto-resumes on a stale queue from a previous session.
-api.runtime.onStartup.addListener(() => {
-	ClearQueue().catch(e => console.error(logstr, 'failed to clear block queue on startup', e));
-});
 
 let ContentScript: {unregister: Function};
 // @ts-ignore

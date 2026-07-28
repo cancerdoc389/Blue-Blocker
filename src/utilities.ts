@@ -47,6 +47,12 @@ const epoch: number = 2500000000000;
 export const QueueId = (time: Date | null = null): number =>
 	epoch - ((time ?? new Date()).valueOf() + Math.random() * 1000);
 
+// items queued longer ago than maxAgeMs encode a `queue` value at or above this
+// boundary (note: a larger `queue` value means an older item). used to evict stale
+// entries from the block queue.
+export const StaleQueueBoundary = (maxAgeMs: number): number =>
+	epoch - new Date().valueOf() + maxAgeMs;
+
 async function sendMessage<T extends MessageResponse>(
 	message: RuntimeMessage,
 	err: string,
