@@ -41,6 +41,8 @@ import {
 	isFollowedBy,
 	isBlocking,
 	isMuting,
+	getVerifiedType,
+	getFollowersCount,
 } from './utilities';
 
 // TODO: tbh this file shouldn't even exist anymore and should be
@@ -352,47 +354,32 @@ function queueBlockUser(
 		);
 }
 
-function checkBlockQueue(): Promise<void> {
-	return new Promise<void>((resolve, reject) => {
-		QueuePop()
-			.then(item => {
-				if (!item) {
-					return reject();
-				}
-				blockUser(item);
-				resolve();
+// resolves once the block request has completed (so the next wait is measured from the
+// block, and a 403/429 raised inside blockUser has already stopped/cooled the consumer
+// before the chain continues). rejects only when the queue is empty, which stops the consumer.
+async function checkBlockQueue(): Promise<void> {
+	let item: BlockUser | null;
+	try {
+		item = await QueuePop();
+	} catch (error) {
+		// always settle: the previous version could leave this promise pending forever,
+		// wedging the consumer until the page was reloaded
+		console.error(logstr, 'unexpected error occurred while processing block queue', error);
+		api.storage.local
+			.set({
+				[EventKey]: {
+					type: ErrorEvent,
+					message: 'unexpected error occurred while processing block queue',
+					detail: { error, event: null },
+				},
 			})
-			.catch(error => {
-				console.error(
-					logstr,
-					'unexpected error occurred while processing block queue',
-					error,
-				);
-				api.storage.local
-					.set({
-						[EventKey]: {
-							type: ErrorEvent,
-							message: 'unexpected error occurred while processing block queue',
-							detail: { error, event: null },
-						},
-					})
-					.catch(error => {
-						console.error(
-							logstr,
-							'unexpected error occurred while processing block queue',
-							error,
-						);
-						api.storage.local.set({
-							[EventKey]: {
-								type: ErrorEvent,
-								message: 'unexpected error occurred while processing block queue',
-								detail: { error, event: null },
-							},
-						});
-						resolve();
-					});
-			});
-	});
+			.catch(e => console.error(logstr, e));
+		return; // resolve: the consumer will try again after the next wait
+	}
+	if (!item) {
+		throw new Error('block queue is empty');
+	}
+	await blockUser(item);
 }
 
 // only block while the tab is actually in the foreground. a steady trickle of blocks
@@ -414,7 +401,9 @@ document.addEventListener('visibilitychange', () => {
 
 const CsrfTokenRegex = /ct0=\s*(\w+)(?:;|$)/;
 
-function blockUser(user: BlockUser, attempt = 1) {
+// one request per call. (the previous version fired a second, duplicated block request from
+// inside its network-error handler, and never reported completion to the consumer.)
+async function blockUser(user: BlockUser, attempt = 1): Promise<void> {
 	const match = window.location.href.match(twitterWindowRegex);
 
 	if (!match) {
@@ -422,226 +411,89 @@ function blockUser(user: BlockUser, attempt = 1) {
 	}
 
 	const root: string = match[0];
-	let url: string = '';
+	let url: string = root.includes('tweetdeck')
+		? 'https://api.twitter.com/1.1/'
+		: `${root}/i/api/1.1/`;
 
-	if (root.includes('tweetdeck')) {
-		url = 'https://api.twitter.com/1.1/';
-	} else {
-		url = `${root}/i/api/1.1/`;
+	const config = (await api.storage.sync.get(DefaultOptions)) as Config;
+	const verb = config.mute ? 'mute' : 'block';
+	url += config.mute ? 'mutes/users/create.json' : 'blocks/create.json';
+
+	const req_headers = ((await api.storage.local.get({ headers: {} })).headers ?? {}) as {
+		[k: string]: string;
+	};
+	const body = `user_id=${user.user_id}`;
+	const headers: { [k: string]: string } = {
+		'content-length': body.length.toString(),
+		'content-type': 'application/x-www-form-urlencoded',
+	};
+
+	for (const header of Headers) {
+		if (req_headers[header]) {
+			headers[header] = req_headers[header];
+		}
 	}
 
-	api.storage.sync.get(DefaultOptions).then(_config => {
-		const config = _config as Config;
-		if (config.mute) {
-			url += 'mutes/users/create.json';
-		} else {
-			url += 'blocks/create.json';
+	// attempt to manually set the csrf token to the current active cookie, else use the request's
+	const csrf = CsrfTokenRegex.exec(document.cookie);
+	headers['x-csrf-token'] = csrf ? csrf[1] : req_headers['x-csrf-token'];
+
+	let response: Response;
+	try {
+		response = await fetch(url, { body, headers, method: 'POST', credentials: 'include' });
+	} catch (error) {
+		if (attempt < 3) {
+			return blockUser(user, attempt + 1);
 		}
+		QueuePush(user);
+		console.error(logstr, `failed to ${verb} ${FormatLegacyName(user.user)}:`, user, error);
+		return;
+	}
 
-		api.storage.local
-			.get({ headers: null })
-			.then(items => items.headers as { [k: string]: string })
-			.then(req_headers => {
-				const body = `user_id=${user.user_id}`;
-				const headers: { [k: string]: string } = {
-					'content-length': body.length.toString(),
-					'content-type': 'application/x-www-form-urlencoded',
-				};
+	console.debug(logstr, `${verb} response:`, response);
 
-				for (const header of Headers) {
-					if (req_headers[header]) {
-						headers[header] = req_headers[header];
-					}
-				}
-
-				// attempt to manually set the csrf token to the current active cookie
-				const csrf = CsrfTokenRegex.exec(document.cookie);
-				if (csrf) {
-					headers['x-csrf-token'] = csrf[1];
-				} else {
-					// default to the request's csrf token
-					headers['x-csrf-token'] = req_headers['x-csrf-token'];
-				}
-
-				const options: {
-					body: string;
-					headers: { [k: string]: string };
-					method: string;
-					credentials: RequestCredentials;
-				} = {
-					body,
-					headers,
-					method: 'POST',
-					credentials: 'include',
-				};
-
-				fetch(url, options)
-					.then(response => {
-						console.debug(logstr, 'block response:', response);
-
-						if (response.status === 403 || response.status === 401) {
-							// user has been logged out, we need to stop queue and re-add
-							consumer.stop();
-							QueuePush(user);
-							api.storage.local.set({ [EventKey]: { type: UserLogoutEvent } });
-							console.log(
-								logstr,
-								'user is logged out, queue consumer has been halted.',
-							);
-						} else if (response.status === 404) {
-							AddUserBlockHistory(user, HistoryStateGone).catch(e =>
-								console.error(logstr, e),
-							);
-							console.log(
-								logstr,
-								`could not block ${FormatLegacyName(
-									user.user,
-								)}, user no longer exists`,
-							);
-						} else if (response.status === 429) {
-							// rate limited: re-queue and back off for a long randomised period
-							// instead of hammering the endpoint, which itself looks automated.
-							QueuePush(user);
-							consumer.cooldown();
-							console.warn(
-								logstr,
-								`rate limited by x.com, backing off. re-queued ${FormatLegacyName(
-									user.user,
-								)}.`,
-							);
-						} else if (response.status >= 300) {
-							consumer.stop();
-							QueuePush(user);
-							console.error(
-								logstr,
-								`failed to block ${FormatLegacyName(
-									user.user,
-								)}, consumer stopped just in case.`,
-								response,
-							);
-						} else {
-							blockCounter.increment();
-							AddUserBlockHistory(user).catch(e => console.error(logstr, e));
-							console.log(
-								logstr,
-								`blocked ${FormatLegacyName(user.user)} due to ${
-									ReasonMap?.[user.reason] ?? user?.external_reason
-								}.`,
-							);
-							api.storage.local.set({
-								[EventKey]: { type: UserBlockedEvent, ...user },
-							});
-						}
-					})
-					.catch(error => {
-						if (attempt < 3) {
-							blockUser(user, attempt + 1);
-						} else {
-							QueuePush(user);
-							console.error(
-								logstr,
-								`failed to block ${FormatLegacyName(user.user)}:`,
-								user,
-								error,
-							);
-						}
-
-						const options: {
-							body: string;
-							headers: { [k: string]: string };
-							method: string;
-							credentials: RequestCredentials;
-						} = {
-							body,
-							headers,
-							method: 'POST',
-							credentials: 'include',
-						};
-
-						fetch(url, options)
-							.then(response => {
-								console.debug(
-									logstr,
-									`${config.mute ? 'mute' : 'block'} response:`,
-									response,
-								);
-
-								if (response.status === 403 || response.status === 401) {
-									// user has been logged out, we need to stop queue and re-add
-									consumer.stop();
-									QueuePush(user);
-									api.storage.local.set({
-										[EventKey]: { type: UserLogoutEvent },
-									});
-									console.log(
-										logstr,
-										'user is logged out, queue consumer has been halted.',
-									);
-								} else if (response.status === 404) {
-									AddUserBlockHistory(user, HistoryStateGone).catch(e =>
-										console.error(logstr, e),
-									);
-									console.log(
-										logstr,
-										`could not ${
-											config.mute ? 'mute' : 'block'
-										} ${FormatLegacyName(user.user)}, user no longer exists`,
-									);
-								} else if (response.status === 429) {
-									// rate limited: re-queue and back off for a long randomised
-									// period instead of hammering, which itself looks automated.
-									QueuePush(user);
-									consumer.cooldown();
-									console.warn(
-										logstr,
-										`rate limited by x.com, backing off. re-queued ${FormatLegacyName(
-											user.user,
-										)}.`,
-									);
-								} else if (response.status >= 300) {
-									consumer.stop();
-									QueuePush(user);
-									console.error(
-										logstr,
-										`failed to ${
-											config.mute ? 'mute' : 'block'
-										} ${FormatLegacyName(
-											user.user,
-										)}, consumer stopped just in case.`,
-										response,
-									);
-								} else {
-									blockCounter.increment();
-									AddUserBlockHistory(user).catch(e => console.error(logstr, e));
-									console.log(
-										logstr,
-										`${config.mute ? 'mut' : 'block'}ed ${FormatLegacyName(
-											user.user,
-										)} due to ${ReasonMap[user.reason]}.`,
-									);
-									api.storage.local.set({
-										[EventKey]: { type: UserBlockedEvent, ...user },
-									});
-								}
-							})
-							.catch(error => {
-								if (attempt < 3) {
-									blockUser(user, attempt + 1);
-								} else {
-									QueuePush(user);
-									console.error(
-										logstr,
-										`failed to ${
-											config.mute ? 'mute' : 'block'
-										} ${FormatLegacyName(user.user)}:`,
-										user,
-										error,
-									);
-								}
-							});
-					});
-			});
-	});
+	if (response.status === 403 || response.status === 401) {
+		// user has been logged out, we need to stop queue and re-add
+		consumer.stop();
+		QueuePush(user);
+		api.storage.local.set({ [EventKey]: { type: UserLogoutEvent } });
+		console.log(logstr, 'user is logged out, queue consumer has been halted.');
+	} else if (response.status === 404) {
+		AddUserBlockHistory(user, HistoryStateGone).catch(e => console.error(logstr, e));
+		console.log(
+			logstr,
+			`could not ${verb} ${FormatLegacyName(user.user)}, user no longer exists`,
+		);
+	} else if (response.status === 429) {
+		// rate limited: re-queue and back off for a long randomised period
+		// instead of hammering the endpoint, which itself looks automated.
+		QueuePush(user);
+		consumer.cooldown();
+		console.warn(
+			logstr,
+			`rate limited by x.com, backing off. re-queued ${FormatLegacyName(user.user)}.`,
+		);
+	} else if (response.status >= 300) {
+		consumer.stop();
+		QueuePush(user);
+		console.error(
+			logstr,
+			`failed to ${verb} ${FormatLegacyName(user.user)}, consumer stopped just in case.`,
+			response,
+		);
+	} else {
+		blockCounter.increment();
+		AddUserBlockHistory(user).catch(e => console.error(logstr, e));
+		console.log(
+			logstr,
+			`${config.mute ? 'mut' : 'block'}ed ${FormatLegacyName(user.user)} due to ${
+				ReasonMap?.[user.reason] ?? user?.external_reason
+			}.`,
+		);
+		api.storage.local.set({
+			[EventKey]: { type: UserBlockedEvent, ...user },
+		});
+	}
 }
 
 const blockableAffiliateLabels: Set<string> = new Set([]);
@@ -665,9 +517,8 @@ export async function BlockBlueVerified(user: BlueBlockerUser, config: CompiledC
 				throw new Error('invalid user object passed to BlockBlueVerified');
 			}
 
-			const hasBlockableVerifiedTypes = blockableVerifiedTypes.has(
-				user.legacy?.verified_type || '',
-			);
+			const verifiedType = getVerifiedType(user);
+			const hasBlockableVerifiedTypes = blockableVerifiedTypes.has(verifiedType);
 			const hasBlockableAffiliateLabels = blockableAffiliateLabels.has(
 				user.affiliates_highlighted_label?.label?.userLabelType || '',
 			);
@@ -704,10 +555,7 @@ export async function BlockBlueVerified(user: BlueBlockerUser, config: CompiledC
 			}
 
 			// since we can be fairly certain all user objects will be the same, break this into a separate function
-			if (
-				user.legacy?.verified_type &&
-				!blockableVerifiedTypes.has(user.legacy.verified_type)
-			) {
+			if (verifiedType && !blockableVerifiedTypes.has(verifiedType)) {
 				return false;
 			}
 
@@ -743,7 +591,7 @@ export async function BlockBlueVerified(user: BlueBlockerUser, config: CompiledC
 				} else if (
 					// verified by follower count
 					config.skip1Mplus &&
-					user.legacy?.followers_count > config.skipFollowerCount
+					getFollowersCount(user) > config.skipFollowerCount
 				) {
 					console.log(
 						logstr,

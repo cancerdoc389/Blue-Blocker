@@ -294,3 +294,14 @@ export function isBlocking(user: BlueBlockerUser): boolean {
 export function isMuting(user: BlueBlockerUser): boolean {
 	return user?.legacy?.muting || user?.relationship_perspectives?.muting || false; // if we can't determine muting, assume not muting
 }
+
+// X.com dropped the `legacy` wrapper from user objects entirely (Sep 2026):
+// `verified_type` now lives in `verification`, follower counts in `relationship_counts`.
+// keep the legacy fallbacks for the old REST endpoints and any straggling responses.
+export function getVerifiedType(user: BlueBlockerUser): string {
+	return user?.verification?.verified_type || user?.legacy?.verified_type || '';
+}
+
+export function getFollowersCount(user: BlueBlockerUser): number {
+	return user?.relationship_counts?.followers ?? user?.legacy?.followers_count ?? 0; // unknown: treat as small, same as before
+}

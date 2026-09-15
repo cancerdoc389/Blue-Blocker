@@ -60,7 +60,16 @@ interface BlueBlockerUser {
 		name: string;
 		screen_name: string;
 	};
-	legacy: {
+	// Sep 2026 schema: `legacy` is gone; these hold what it used to
+	verification?: {
+		verified?: boolean;
+		verified_type?: string;
+	};
+	relationship_counts?: {
+		followers?: number;
+		following?: number;
+	};
+	legacy?: {
 		blocking?: boolean;
 		followed_by?: boolean;
 		following?: boolean;
