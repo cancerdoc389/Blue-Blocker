@@ -131,6 +131,8 @@ export const ErrorStatus: ErrorStatus = 'ERROR';
 
 // multi-tab event keys
 export const EventKey = 'MultiTabEvent';
+// storage.local key for the lock that makes one tab the block consumer
+export const QueueConsumerLockKey = 'QueueConsumerCriticalPoint';
 export const ErrorEvent = 'ErrorEvent';
 export const MessageEvent = 'MessageEvent';
 

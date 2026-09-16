@@ -11,6 +11,8 @@ Summary
 
 # Unreleased
 
+-   fix: the block lock is now a 3-minute lease renewed every 30 s, so a closed, refreshed or orphaned tab frees it within minutes instead of holding it for the whole of a wait (up to 90 min). the lock is also cleared whenever the extension is reloaded
+-   update: consumer status (started, waiting for another tab, next block in Ns, cooling down, stopped) is logged at the default console level so it can be seen without enabling Verbose
 -   update: blocks continue while the x.com tab is in the background; the foreground-only gate has been removed
 -   fix: read `verified_type` from `verification` and follower counts from `relationship_counts` now that x.com has dropped the `legacy` wrapper from user objects (restores the "skip accounts with over N followers" option and Business-checkmark detection) (#437)
 -   fix: only ever run one block chain per tab. concurrent `start()` calls used to spawn parallel chains that multiplied the block rate and defeated the pacing entirely

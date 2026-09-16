@@ -17,6 +17,7 @@ import {
 	MessageEvent,
 	ConsentGranted,
 	OpenConsentPage,
+	QueueConsumerLockKey,
 } from '../constants';
 import { abbreviate, RefId } from '../utilities';
 import {
@@ -147,6 +148,9 @@ function isBelowMinVer(newVersion: string, minVersion: string) {
 }
 
 api.runtime.onInstalled.addListener( ({reason, previousVersion}) => {
+	// an extension reload orphans the content scripts in open tabs. whichever one held the
+	// block lock can no longer release it, so drop it here rather than waiting for the lease to lapse.
+	api.storage.local.remove(QueueConsumerLockKey);
 	try {
 		/** @ts-ignore I hate that I have to use FF specific APIs to detect FF :)))*/
 		api.runtime?.getBrowserInfo().then(info => {
