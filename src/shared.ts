@@ -382,22 +382,14 @@ async function checkBlockQueue(): Promise<void> {
 	await blockUser(item);
 }
 
-// only block while the tab is actually in the foreground. a steady trickle of blocks
-// while the tab sits in the background is a strong non-human signal.
-const consumer = new QueueConsumer(
-	api.storage.local,
-	checkBlockQueue,
-	() => document.visibilityState === 'visible',
-);
+// blocks continue while the tab is in the background (user's choice, Sep 2026). the
+// randomised pacing still applies. to restore foreground-only blocking, pass
+// `() => document.visibilityState === 'visible'` as the third argument and re-add a
+// `visibilitychange` listener that calls consumer.start().
+const consumer = new QueueConsumer(api.storage.local, checkBlockQueue);
 // note: we deliberately do NOT start the consumer on page load. blocking begins only
 // once this session queues an account (see queueBlockUser), after a randomised startup
 // delay, so it never auto-drains a queue the instant x.com opens.
-document.addEventListener('visibilitychange', () => {
-	if (document.visibilityState === 'visible') {
-		// nudge the consumer to resume when the user returns to the tab
-		consumer.start();
-	}
-});
 
 const CsrfTokenRegex = /ct0=\s*(\w+)(?:;|$)/;
 

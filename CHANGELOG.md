@@ -11,11 +11,11 @@ Summary
 
 # Unreleased
 
+-   update: blocks continue while the x.com tab is in the background; the foreground-only gate has been removed
 -   fix: read `verified_type` from `verification` and follower counts from `relationship_counts` now that x.com has dropped the `legacy` wrapper from user objects (restores the "skip accounts with over N followers" option and Business-checkmark detection) (#437)
 -   fix: only ever run one block chain per tab. concurrent `start()` calls used to spawn parallel chains that multiplied the block rate and defeated the pacing entirely
 -   fix: wait for each block request to finish before scheduling the next, and never leave the queue consumer wedged on a queue error
 -   fix: send one block request per attempt (a duplicated request was fired from the network-error handler)
--   fix: don't block while the tab is in the background, even if the wait expires there
 -   update: wider, log-uniformly randomised block pacing: 1–5 min warm-up, 45 s–8 min between blocks, bursts of 3–12, 12–90 min rests, 30 min–2 h back-off on rate limits, and a 2–6 h pause after 300 blocks
 -   fix: intercept `fetch()` in addition to `XMLHttpRequest` so timeline parsing and auth-header capture survive x.com moving API traffic to fetch (restores queue processing and blocking of new accounts)
 -   fix: detect the extension API namespace reliably on Chromium browsers that expose a partial `browser` global (restores popup controls and toolbar badge) (#427)
