@@ -11,6 +11,7 @@ Summary
 
 # Unreleased
 
+-   update: faster pacing: 1–3 min warm-up, 45 s–4 min between blocks, bursts of 4–12, 8–40 min rests, 2–4 h pause after 300 blocks (rate-limit back-off unchanged)
 -   fix: the block lock is now a 3-minute lease renewed every 30 s, so a closed, refreshed or orphaned tab frees it within minutes instead of holding it for the whole of a wait (up to 90 min). the lock is also cleared whenever the extension is reloaded
 -   update: consumer status (started, waiting for another tab, next block in Ns, cooling down, stopped) is logged at the default console level so it can be seen without enabling Verbose
 -   update: blocks continue while the x.com tab is in the background; the foreground-only gate has been removed

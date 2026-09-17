@@ -12,18 +12,18 @@ const criticalPointKey = QueueConsumerLockKey;
 // never produce silly values (no bursts of 100/sec, no gaps of a million seconds).
 // ponytail: constants tuned by hand against x.com tolerances; adjust here if they change.
 const PER_BLOCK_MIN_MS = 45_000; // floor gap between blocks within a burst (45s)
-const PER_BLOCK_MAX_MS = 8 * 60_000; // ceiling gap between blocks within a burst (8m)
-const BURST_MIN = 3; // blocks in a burst before a long rest
+const PER_BLOCK_MAX_MS = 4 * 60_000; // ceiling gap between blocks within a burst (4m)
+const BURST_MIN = 4; // blocks in a burst before a long rest
 const BURST_MAX = 12;
-const REST_MIN_MS = 12 * 60_000; // rest between bursts (12m)
-const REST_MAX_MS = 90 * 60_000; // rest between bursts (90m)
+const REST_MIN_MS = 8 * 60_000; // rest between bursts (8m)
+const REST_MAX_MS = 40 * 60_000; // rest between bursts (40m)
 const STARTUP_MIN_MS = 60_000; // delay before the first block of a session (1m)
-const STARTUP_MAX_MS = 5 * 60_000; // delay before the first block of a session (5m)
+const STARTUP_MAX_MS = 3 * 60_000; // delay before the first block of a session (3m)
 const COOLDOWN_MIN_MS = 30 * 60_000; // back-off after x.com throttles us (30m)
 const COOLDOWN_MAX_MS = 120 * 60_000; // back-off after x.com throttles us (2h)
 const SESSION_CAP = 300; // blocks before an enforced long pause
 const CAP_PAUSE_MIN_MS = 2 * 3_600_000; // pause after hitting the cap (2h)
-const CAP_PAUSE_MAX_MS = 6 * 3_600_000; // pause after hitting the cap (6h)
+const CAP_PAUSE_MAX_MS = 4 * 3_600_000; // pause after hitting the cap (4h)
 const CP_BASE_MS = 1000; // polling cadence while another tab holds the lock
 // the lock is a short lease renewed by heartbeat, not one long lease covering the whole wait,
 // so a tab that is closed, refreshed or orphaned by an extension reload frees the lock within
